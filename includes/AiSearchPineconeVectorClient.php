@@ -38,7 +38,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
 
     // If it's a Key name, resolve to secret value.
     if ($resolve_key_name_with_key_module && $value) {
-      $resolved = key_get_key_value($value);
+      $resolved = function_exists('key_get_key_value') ? key_get_key_value($value) : NULL;
       if (!is_string($resolved) || $resolved === '') {
         watchdog('ai_search_pinecone', "Invalid $description (empty resolved value) for option @key.", ['@key' => $key], WATCHDOG_ERROR);
         throw new \Exception("Invalid or missing $description.");
@@ -91,11 +91,19 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
       'timeout' => 30,
     ]);
 
-    if (!empty($response->error) && empty($response->data)) {
-      throw new \Exception('Pinecone request failed: ' . $response->error);
-    }
+    $status = isset($response->code) ? (int) $response->code : 0;
     $data = json_decode($response->data ?? '', TRUE);
-    return is_array($data) ? $data : [];
+    if (!empty($response->error) || $status >= 400) {
+      $message = !empty($response->error) ? $response->error : '';
+      if (is_array($data)) {
+        $message = $data['message'] ?? $data['error'] ?? $message;
+      }
+      throw new \Exception('Pinecone request failed' . ($message ? ': ' . $message : ' (HTTP ' . $status . ')'));
+    }
+    if (!is_array($data)) {
+      throw new \Exception('Pinecone returned invalid JSON.');
+    }
+    return $data;
   }
 
   /**
@@ -146,7 +154,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
   /**
    * Error handler.
    */
-  protected function handleError(string $action, \Exception $e): void {
+  protected function handleError(string $action, \Throwable $e): void {
     watchdog('ai_search_pinecone', "Error during Pinecone $action: @message", [
       '@message' => $e->getMessage(),
     ], WATCHDOG_ERROR);
@@ -187,7 +195,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
       $this->logResponse('query', $data);
       return $data;
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       $this->handleError('query', $e);
     }
   }
@@ -235,7 +243,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
       $this->logResponse('upsert', $data);
       return $data;
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       $this->handleError('upsert', $e);
       return NULL;
     }
@@ -262,7 +270,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
       }
       return $rows;
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       $this->handleError('stats', $e);
       return [];
     }
@@ -301,7 +309,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
     try {
       return $this->pineconePost('/vectors/delete', $payload);
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       $this->handleError('delete', $e);
       return NULL;
     }
@@ -328,7 +336,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
     try {
       $this->pineconePost('/vectors/delete', $payload);
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       $this->handleError('deleteAll', $e);
     }
   }

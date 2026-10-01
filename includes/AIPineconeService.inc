@@ -88,7 +88,9 @@ class AIPineconeService extends SearchApiAbstractService {
    */
   public function indexItems(SearchApiIndex $index, array $items) {
     global $ai_search_is_indexing;
+    $previous_indexing = !empty($ai_search_is_indexing);
     $ai_search_is_indexing = TRUE;
+    try {
 
     // Dimension from server options or global fallback.
     $expected_dimension = isset($this->options['embeddings_engine_configuration']['dimension'])
@@ -99,6 +101,7 @@ class AIPineconeService extends SearchApiAbstractService {
     $successful_item_ids = [];
     $batch_vectors = [];
     $ids_by_type = [];
+    $pending_item_ids = [];
 
     if (empty($items)) {
       return [];
@@ -132,6 +135,7 @@ class AIPineconeService extends SearchApiAbstractService {
         if (empty($rows)) {
           continue;
         }
+        $pending_item_ids[$entity_type][] = $entity_id;
 
         foreach ($rows as $r) {
           $pinecone_id = "entity:{$entity_type}/{$entity_id}:en:{$r['field_name']}:{$r['chunk_index']}";
@@ -139,12 +143,11 @@ class AIPineconeService extends SearchApiAbstractService {
           $batch_vectors[] = [
             'id'       => $pinecone_id,
             'values'   => $r['values'],
-            'metadata' => $r['metadata'],
+            'metadata' => ai_search_prepare_vector_metadata($r['metadata'] ?? []),
             'llm_vector_embedding' => $r['llm_vector_embedding'],
           ];
         }
 
-        $successful_item_ids[] = $entity_id;
       }
     }
 
@@ -155,15 +158,20 @@ class AIPineconeService extends SearchApiAbstractService {
           'namespace' => $namespace,
           'expected_dimension' => $expected_dimension,
         ]);
-        //watchdog('ai_search_pinecone', 'Indexed @count vectors.',
-        // ['@count' => count($batch_vectors)], WATCHDOG_NOTICE];
+        foreach ($pending_item_ids as $entity_type => $ids) {
+          $successful_item_ids = array_merge($successful_item_ids, $ids);
+        }
       }
-      catch (\Exception $e) {
+      catch (\Throwable $e) {
         watchdog('ai_search_pinecone', 'Upsert error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
       }
     }
 
-    return $successful_item_ids;
+    return array_values(array_unique($successful_item_ids));
+    }
+    finally {
+      $ai_search_is_indexing = $previous_indexing;
+    }
   }
 
   /**
@@ -180,53 +188,12 @@ class AIPineconeService extends SearchApiAbstractService {
     $index = $query->getIndex();
     $index_options = isset($index->options) ? $index->options : [];
 
-    // Model selection: server options (canonical) → service embedding_model fallback.
-    $model = $this->options['embeddings_engine'] ?? $this->options['embedding_model'] ?? NULL;
-
-    if (empty($model)) {
-      watchdog(
-        'ai_search_pinecone',
-        'No model configured!',
-        [],
-        WATCHDOG_ERROR
-      );
+    $resolved = ai_search_resolve_query_embedding($query, $this->options, 'ai_search_pinecone');
+    if ($resolved === NULL) {
       return ['result count' => 0, 'results' => []];
     }
-
-    // Extract search text.
-    $keys = $query->getKeys();
-    $text = is_array($keys)
-      ? implode(' ', array_filter($keys, function($key) {
-        return is_string($key) && $key !== 'AND' && $key !== '#conjunction';
-      }))
-      : (string) $keys;
-    $text = trim($text);
-
-    if (empty($text)) {
-      return ['result count' => 0, 'results' => []];
-    }
-
-    // Get query embedding using the appropriate provider via compatibility helper.
-    $stripped_model = NULL;
-    $api = ai_get_api_for_model($model, $stripped_model);
-    $model_to_use = !empty($stripped_model) ? $stripped_model : $model;
-
-    if ($api && method_exists($api, 'recordLog')) {
-      $api->recordLog('search_embedding', $model, ['text_len' => strlen($text)], NULL, TRUE, 0);
-    }
-
-    // Final fallback: if helper didn't return a client, try legacy instantiation.
-    if (!$api) {
-      watchdog('ai_search_pinecone', 'No AI client available for model: @model', ['@model' => $model], WATCHDOG_ERROR);
-      return ['result count' => 0, 'results' => []];
-    }
-
-    // Request embedding using the compatibility wrapper which understands different client shapes.
-    $query_embedding = $api->embedding($text, $model_to_use);
-
-    if (empty($query_embedding)) {
-      throw new Exception('Failed to retrieve embedding.');
-    }
+    $text = $resolved['text'];
+    $query_embedding = $resolved['vector'];
 
     // Get expected dimension from server options, fallback to global.
     $expected_dimension = isset($this->options['embeddings_engine_configuration']['dimension'])
@@ -279,6 +246,11 @@ class AIPineconeService extends SearchApiAbstractService {
           $entity_id = $m[2];
 
           $item_id = $index->getEntityType() === $entity_type ? $entity_id : "{$entity_type}/{$entity_id}";
+          // Matches arrive best-first; keep the best chunk per entity. Later chunks
+          // would overwrite its score/excerpt while keeping its array position.
+          if (isset($results[$item_id])) {
+            continue;
+          }
           $results[$item_id] = [
             'item_id' => $item_id,
             'score'   => $nm['score'],
@@ -293,7 +265,7 @@ class AIPineconeService extends SearchApiAbstractService {
 
       return ['result count' => count($results), 'results' => $results];
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       watchdog('ai_search_pinecone', 'Query error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
       return ['result count' => 0, 'results' => []];
     }
@@ -317,23 +289,26 @@ class AIPineconeService extends SearchApiAbstractService {
       if (empty($ids) || !is_array($ids)) {
         return;
       }
-      $entity_type = $index ? $index->getEntityType() : 'node';
-      $entity_ids = array_values(array_unique(array_map('intval', array_filter($ids))));
-      if (empty($entity_ids)) {
+      $ids_by_type = ai_search_normalize_entity_ids($ids, $index ? $index->getEntityType() : 'node');
+      if (empty($ids_by_type)) {
         return;
       }
-      $payload['filter'] = [
-        '$and' => [
-          ['entity_type' => ['$eq' => $entity_type]],
-          ['entity_id' => ['$in' => $entity_ids]],
-        ],
-      ];
+      $filters = [];
+      foreach ($ids_by_type as $entity_type => $entity_ids) {
+        $filters[] = [
+          '$and' => [
+            ['entity_type' => ['$eq' => $entity_type]],
+            ['entity_id' => ['$in' => $entity_ids]],
+          ],
+        ];
+      }
+      $payload['filter'] = count($filters) === 1 ? $filters[0] : ['$or' => $filters];
     }
 
     try {
       $this->client->delete($payload);
     }
-    catch (\Exception $e) {
+    catch (\Throwable $e) {
       watchdog('ai_search_pinecone', 'Delete error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
     }
   }
@@ -345,13 +320,12 @@ class AIPineconeService extends SearchApiAbstractService {
     $item->extra_data['metadata'] = $result_row['metadata'];
   }
 
-  public function getNamespace(SearchApiIndex $index) {
-    $ns = isset($this->options['namespace']) ? trim((string) $this->options['namespace']) : '';
-    if ($ns === '') {
-      $ns = $index->machine_name; // e.g. "pinecone_search"
-    }
+  public function getNamespace($index) {
+    $prefix = isset($this->options['namespace']) ? trim((string) $this->options['namespace']) : '';
+    $parts = $prefix === '' ? [] : [$prefix];
+    $parts[] = ($index && !empty($index->machine_name)) ? $index->machine_name : 'default';
     // Pinecone-friendly chars only
-    return preg_replace('/[^A-Za-z0-9_\-]/', '_', $ns);
+    return preg_replace('/[^A-Za-z0-9_\-]/', '_', implode('__', $parts));
   }
 
   /**

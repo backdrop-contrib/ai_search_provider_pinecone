@@ -274,7 +274,7 @@ class AIPineconeService extends SearchApiAbstractService {
   /**
    * Delete vectors.
    */
-  public function deleteItems($ids = 'all', SearchApiIndex $index = NULL) {
+  public function deleteItems($ids = 'all', ?SearchApiIndex $index = NULL) {
     global $ai_search_is_indexing;
     if (!empty($ai_search_is_indexing)) {
       return;

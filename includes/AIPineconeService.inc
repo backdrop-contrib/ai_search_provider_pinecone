@@ -163,7 +163,7 @@ class AIPineconeService extends SearchApiAbstractService {
         }
       }
       catch (\Throwable $e) {
-        watchdog('ai_search_pinecone', 'Upsert error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
+        watchdog('ai_search_provider_pinecone', 'Upsert error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
       }
     }
 
@@ -188,7 +188,7 @@ class AIPineconeService extends SearchApiAbstractService {
     $index = $query->getIndex();
     $index_options = isset($index->options) ? $index->options : [];
 
-    $resolved = ai_search_resolve_query_embedding($query, $this->options, 'ai_search_pinecone');
+    $resolved = ai_search_resolve_query_embedding($query, $this->options, 'ai_search_provider_pinecone');
     if ($resolved === NULL) {
       return ['result count' => 0, 'results' => []];
     }
@@ -203,7 +203,7 @@ class AIPineconeService extends SearchApiAbstractService {
     if (!is_array($query_embedding) || count($query_embedding) !== $expected_dimension) {
       $actual_dimension = (is_array($query_embedding) && !empty($query_embedding)) ? count($query_embedding) : 0;
       watchdog(
-        'ai_search_pinecone',
+        'ai_search_provider_pinecone',
         'Query embedding dimension mismatch or empty. Expected: @expected_dim, actual: @actual_dim.',
         [
           '@expected_dim' => $expected_dimension,
@@ -266,7 +266,7 @@ class AIPineconeService extends SearchApiAbstractService {
       return ['result count' => count($results), 'results' => $results];
     }
     catch (\Throwable $e) {
-      watchdog('ai_search_pinecone', 'Query error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
+      watchdog('ai_search_provider_pinecone', 'Query error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
       return ['result count' => 0, 'results' => []];
     }
   }
@@ -274,7 +274,7 @@ class AIPineconeService extends SearchApiAbstractService {
   /**
    * Delete vectors.
    */
-  public function deleteItems($ids = 'all', SearchApiIndex $index = NULL) {
+  public function deleteItems($ids = 'all', ?SearchApiIndex $index = NULL) {
     global $ai_search_is_indexing;
     if (!empty($ai_search_is_indexing)) {
       return;
@@ -309,7 +309,7 @@ class AIPineconeService extends SearchApiAbstractService {
       $this->client->delete($payload);
     }
     catch (\Throwable $e) {
-      watchdog('ai_search_pinecone', 'Delete error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
+      watchdog('ai_search_provider_pinecone', 'Delete error: @m', ['@m' => $e->getMessage()], WATCHDOG_ERROR);
     }
   }
 

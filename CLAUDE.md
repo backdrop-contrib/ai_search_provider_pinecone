@@ -6,7 +6,7 @@ See `README.md` in this directory for requirements and server configuration (Key
 
 ## Code Map
 
-- `ai_search_pinecone.module` — registers the `pinecone` Search API service backend
+- `ai_search_provider_pinecone.module` — registers the `pinecone` Search API service backend
 - `includes/AIPineconeService.inc` — `AIPineconeService extends SearchApiAbstractService` (note: does **not** implement `AiSearchBackendInterface`, unlike the other three provider backends — check this if adding shared-interface logic in `ai_search` core)
 - `includes/AiSearchPineconeVectorClient.php` — `AiSearchPineconeVectorClient extends AiSearchVectorClientBase`; HTTP client for the Pinecone API (`query()`, `upsert()`, `stats()`)
 

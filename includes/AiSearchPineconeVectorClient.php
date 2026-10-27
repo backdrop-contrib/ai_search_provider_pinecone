@@ -40,14 +40,14 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
     if ($resolve_key_name_with_key_module && $value) {
       $resolved = function_exists('key_get_key_value') ? key_get_key_value($value) : NULL;
       if (!is_string($resolved) || $resolved === '') {
-        watchdog('ai_search_pinecone', "Invalid $description (empty resolved value) for option @key.", ['@key' => $key], WATCHDOG_ERROR);
+        watchdog('ai_search_provider_pinecone', "Invalid $description (empty resolved value) for option @key.", ['@key' => $key], WATCHDOG_ERROR);
         throw new \Exception("Invalid or missing $description.");
       }
       $value = $resolved;
     }
 
     if (!is_string($value) || trim($value) === '') {
-      watchdog('ai_search_pinecone', "Missing $description for option @key.", ['@key' => $key], WATCHDOG_ERROR);
+      watchdog('ai_search_provider_pinecone', "Missing $description for option @key.", ['@key' => $key], WATCHDOG_ERROR);
       throw new \Exception("Invalid or missing $description.");
     }
 
@@ -120,7 +120,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
    * Log payload to watchdog in DEBUG.
    */
   protected function logPayload(string $action, array $payload): void {
-    watchdog('ai_search_pinecone', "Pinecone $action payload: @summary", [
+    watchdog('ai_search_provider_pinecone', "Pinecone $action payload: @summary", [
       '@summary' => $this->summarizeLogData($payload),
     ], WATCHDOG_DEBUG);
   }
@@ -129,7 +129,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
    * Log response to watchdog in DEBUG.
    */
   protected function logResponse(string $action, $response): void {
-    watchdog('ai_search_pinecone', "Pinecone $action response: @summary", [
+    watchdog('ai_search_provider_pinecone', "Pinecone $action response: @summary", [
       '@summary' => $this->summarizeLogData($response),
     ], WATCHDOG_DEBUG);
   }
@@ -155,7 +155,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
    * Error handler.
    */
   protected function handleError(string $action, \Throwable $e): void {
-    watchdog('ai_search_pinecone', "Error during Pinecone $action: @message", [
+    watchdog('ai_search_provider_pinecone', "Error during Pinecone $action: @message", [
       '@message' => $e->getMessage(),
     ], WATCHDOG_ERROR);
     throw $e;
@@ -175,7 +175,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
     $expected_dimension = isset($parameters['expected_dimension']) ? (int)$parameters['expected_dimension'] : 1536;
     $vector = $parameters['vector'];
     if (!is_array($vector) || count($vector) !== $expected_dimension) {
-      watchdog('ai_search_pinecone', 'Query vector dimension mismatch: expected @exp, got @got', [
+      watchdog('ai_search_provider_pinecone', 'Query vector dimension mismatch: expected @exp, got @got', [
         '@exp' => $expected_dimension,
         '@got' => is_array($vector) ? count($vector) : 'N/A',
       ], WATCHDOG_ERROR);
@@ -222,7 +222,7 @@ class AiSearchPineconeVectorClient extends AiSearchVectorClientBase {
       if (is_array($vector['values']) && count($vector['values']) === $expected_dimension) {
         $filtered_vectors[] = $vector;
       } else {
-        watchdog('ai_search_pinecone', 'Upsert vector dimension mismatch: expected @exp, got @got', [
+        watchdog('ai_search_provider_pinecone', 'Upsert vector dimension mismatch: expected @exp, got @got', [
           '@exp' => $expected_dimension,
           '@got' => is_array($vector['values']) ? count($vector['values']) : 'N/A',
         ], WATCHDOG_WARNING);

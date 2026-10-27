@@ -8,7 +8,7 @@
 /**
  * Implements hook_autoload_info().
  */
-function ai_search_pinecone_autoload_info() {
+function ai_search_provider_pinecone_autoload_info() {
   return [
     'AIPineconeService'                 => 'includes/AIPineconeService.inc',
     'AiSearchPineconeVectorClient' => 'includes/AiSearchPineconeVectorClient.php',
@@ -18,7 +18,7 @@ function ai_search_pinecone_autoload_info() {
 /**
  * Implements hook_search_api_service_info().
  */
-function ai_search_pinecone_search_api_service_info() {
+function ai_search_provider_pinecone_search_api_service_info() {
   return [
     'pinecone' => [
       'name'        => t('Pinecone'),
@@ -32,12 +32,12 @@ function ai_search_pinecone_search_api_service_info() {
 /**
  * Implements hook_ai_search_rag_backend_info().
  */
-function ai_search_pinecone_ai_search_rag_backend_info() {
+function ai_search_provider_pinecone_ai_search_rag_backend_info() {
   return [
     'pinecone' => [
       'server_classes' => ['pinecone', 'pinecone_service'],
-      'query_callback' => 'ai_search_pinecone_rag_query',
-      'matches_callback' => 'ai_search_pinecone_rag_matches',
+      'query_callback' => 'ai_search_provider_pinecone_rag_query',
+      'matches_callback' => 'ai_search_provider_pinecone_rag_matches',
     ],
   ];
 }
@@ -48,14 +48,14 @@ function ai_search_pinecone_ai_search_rag_backend_info() {
  * Registered via hook_ai_search_rag_backend_info(); the signature matches the
  * query_callback contract documented in ai_search.api.php.
  */
-function ai_search_pinecone_rag_query($server, $index, array $vector, $dimension, $top_k) {
+function ai_search_provider_pinecone_rag_query($server, $index, array $vector, $dimension, $top_k) {
   // Classes are autoloaded via hook_autoload_info(); the explicit loads only
   // cover edge cases where autoloading has not run yet.
   if (!class_exists('AIPineconeService')) {
-    module_load_include('inc', 'ai_search_pinecone', 'includes/AIPineconeService');
+    module_load_include('inc', 'ai_search_provider_pinecone', 'includes/AIPineconeService');
   }
   if (!class_exists('AiSearchPineconeVectorClient')) {
-    module_load_include('php', 'ai_search_pinecone', 'includes/AiSearchPineconeVectorClient');
+    module_load_include('php', 'ai_search_provider_pinecone', 'includes/AiSearchPineconeVectorClient');
   }
   if (!class_exists('AIPineconeService') || !class_exists('AiSearchPineconeVectorClient')) {
     throw new \Exception('Pinecone provider classes unavailable. Enable the AI Search Pinecone module.');
@@ -84,6 +84,6 @@ function ai_search_pinecone_rag_query($server, $index, array $vector, $dimension
  *
  * Registered via hook_ai_search_rag_backend_info().
  */
-function ai_search_pinecone_rag_matches($vector_results, $server = NULL, $index = NULL) {
+function ai_search_provider_pinecone_rag_matches($vector_results, $server = NULL, $index = NULL) {
   return !empty($vector_results['matches']) && is_array($vector_results['matches']) ? $vector_results['matches'] : [];
 }

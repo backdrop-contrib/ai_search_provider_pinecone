@@ -5,6 +5,7 @@ Pinecone vector database provider for the Backdrop CMS AI Search module. Stores 
 ## Requirements
 
 - Backdrop CMS 1.x
+- PHP 8.2 or later
 - `ai_search` module
 - A [Pinecone](https://www.pinecone.io/) account with an existing index
 - The [Key](https://backdropcms.org/project/key) module, with keys configured for your Pinecone API key and base URL

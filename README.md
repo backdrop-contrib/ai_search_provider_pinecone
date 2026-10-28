@@ -1,4 +1,4 @@
-# AI Search Pinecone
+# AI Search Provider Pinecone
 
 Pinecone vector database provider for the Backdrop CMS AI Search module. Stores and queries embeddings in Pinecone to power AI-driven semantic search experiences.
 

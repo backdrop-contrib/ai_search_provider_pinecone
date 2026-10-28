@@ -1,4 +1,4 @@
-name = AI Search Pinecone
+name = AI Search Provider Pinecone
 description = Pinecone vector database provider for AI search.
 backdrop = 1.x
 php = 8.2

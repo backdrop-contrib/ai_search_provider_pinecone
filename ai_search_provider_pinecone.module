@@ -58,7 +58,7 @@ function ai_search_provider_pinecone_rag_query($server, $index, array $vector, $
     module_load_include('php', 'ai_search_provider_pinecone', 'includes/AiSearchPineconeVectorClient');
   }
   if (!class_exists('AIPineconeService') || !class_exists('AiSearchPineconeVectorClient')) {
-    throw new \Exception('Pinecone provider classes unavailable. Enable the AI Search Pinecone module.');
+    throw new \Exception('Pinecone provider classes unavailable. Enable the AI Search Provider Pinecone module.');
   }
 
   $service = new AIPineconeService($server);
